@@ -18,19 +18,64 @@
 
 namespace bdm {
 
+struct RemoveFromSimulationBM : public BaseBiologyModule {
+  RemoveFromSimulationBM() : BaseBiologyModule(gAllBmEvents) {}
+
+  template <typename T>
+  void Run(T* cell) {
+    if (cell->GetDiameter() < 50) {
+      cell->ChangeVolume(40000);
+    } else {
+      cell->RemoveFromSimulation();
+    }
+  }
+
+  ClassDefNV(RemoveFromSimulationBM, 1);
+};
+
 // Define compile time parameter
 template <typename Backend>
-struct CompileTimeParam : public DefaultCompileTimeParam<Backend> {};
+struct CompileTimeParam : public DefaultCompileTimeParam<Backend> {
+  using BiologyModules = Variant<RemoveFromSimulationBM>;
+};
 
 inline int Simulate(int argc, const char** argv) {
-  Simulation<> simulation(argc, argv);
+  Simulation<> simulation(argc, argv); 
+  auto* param = simulation.GetParam();
 
-  // Define initial model - in this example: single cell at origin
-  auto* rm = simulation.GetResourceManager();
-  auto&& cell = rm->New<Cell>(30);
+  param->bound_space_ = true;
+  param->min_bound_ = 0;
+  param->max_bound_ = 500;
 
+   auto construct = [&](const std::array<double, 3>& position) {
+    Cell cell(position);
+    cell.SetDiameter(40);
+    cell.SetMass(1.0);
+    return cell;
+  };
+ ModelInitializer::CreateCellsRandom(param->min_bound_, param->max_bound_, 5, construct);
+
+ auto create = [&](const std::array<double, 3>& place){
+   Cell cell(place);
+   cell.SetDiameter(30);
+   cell.SetMass(1.0);
+   cell.AddBiologyModule(RemoveFromSimulationBM());
+   return cell;
+   };
+ ModelInitializer::CreateCellsRandom(param->min_bound_, param->max_bound_, 5, create);
+
+ auto develop = [&](const std::array<double, 3>& wall){
+   Cell cell(wall);
+   cell.SetDiameter(25);
+   cell.SetMass(1.0);
+   cell.AddBiologyModule(RemoveFromSimulationBM());
+   return cell;
+   };
+ ModelInitializer::CreateCellsRandom(param->min_bound_, param->max_bound_, 5, develop);
+ 
   // Run simulation for one timestep
-  simulation.GetScheduler()->Simulate(1);
+  simulation.GetScheduler()->Simulate(2000);
+
 
   std::cout << "Simulation completed successfully!" << std::endl;
   return 0;
